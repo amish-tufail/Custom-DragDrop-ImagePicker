@@ -9,11 +9,11 @@ import SwiftUI
 import PhotosUI
 
 struct ContentView: View {
-    
     var body: some View {
         NavigationStack {
             VStack {
                 ImagePicker(title: "Drag & Drop Image", subTitle: "Tap to add an Image", systemImage: "square.and.arrow.up", tint: .blue) { image in
+                    
                 }
                 .frame(maxWidth: 300, maxHeight: 250)
                 .padding(.top, 30.0)
@@ -79,6 +79,7 @@ struct ImagePicker: View {
             }
             .animation(.snappy, value: isLoading)
             .animation(.snappy, value: previewImage)
+            // Drag Photo Add
             .dropDestination(for: Data.self, action: { items, location in
                 if let firstItem = items.first, let droppedImage = UIImage(data: firstItem) {
                     previewImage = droppedImage // Using this, it causes immense memory usage, to avoid this we create thumbnail of image and will use that
@@ -91,6 +92,16 @@ struct ImagePicker: View {
             }, isTargeted: { _ in
                 
             })
+            // Manual Photo Add
+            .onTapGesture {
+                showImagePicker.toggle()
+            }
+            .photosPicker(isPresented: $showImagePicker, selection: $photoItem)
+            .onChange(of: photoItem, { _, newValue in
+                if let newValue {
+                    extractImage(newValue, size)
+                }
+            })
             .contentShape(.rect)
             .background {
                 ZStack {
@@ -100,6 +111,20 @@ struct ImagePicker: View {
                         .stroke(tint, style: .init(lineWidth: 1, dash: [12]))
                         .padding(1)
                 }
+            }
+        }
+    }
+    func extractImage(_ photoItem: PhotosPickerItem, _ size: CGSize) {
+        Task.detached {
+            guard let imageData = try? await photoItem.loadTransferable(type: Data.self) else {
+                return
+            }
+            await MainActor.run {
+                if let selectedImage = UIImage(data: imageData) {
+                    generateImageThumbnail(selectedImage, size)
+                    onImageChange(selectedImage)
+                }
+                self.photoItem = nil
             }
         }
     }
