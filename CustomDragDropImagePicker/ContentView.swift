@@ -34,7 +34,7 @@ struct ImagePicker: View {
     var subTitle: String
     var systemImage: String
     var tint: Color
-    var onImageChange: (UIImage) -> ()
+    var onImageChange: (UIImage) -> () // This is only to return back the image, just like we do in escaping closures
     
     @State private var showImagePicker: Bool = false
     @State private var photoItem: PhotosPickerItem?
@@ -79,6 +79,18 @@ struct ImagePicker: View {
             }
             .animation(.snappy, value: isLoading)
             .animation(.snappy, value: previewImage)
+            .dropDestination(for: Data.self, action: { items, location in
+                if let firstItem = items.first, let droppedImage = UIImage(data: firstItem) {
+                    previewImage = droppedImage // Using this, it causes immense memory usage, to avoid this we create thumbnail of image and will use that
+                    generateImageThumbnail(droppedImage, size) // We use this now
+                    // Sending back the image
+                    onImageChange(droppedImage)
+                    return true
+                }
+                return false
+            }, isTargeted: { _ in
+                
+            })
             .contentShape(.rect)
             .background {
                 ZStack {
@@ -88,6 +100,17 @@ struct ImagePicker: View {
                         .stroke(tint, style: .init(lineWidth: 1, dash: [12]))
                         .padding(1)
                 }
+            }
+        }
+    }
+    
+    func generateImageThumbnail(_ image: UIImage, _ size: CGSize) {
+        isLoading = true
+        Task.detached {
+            let thumbnailImage = await image.byPreparingThumbnail(ofSize: size)
+            await MainActor.run {
+                previewImage = thumbnailImage
+                isLoading = false
             }
         }
     }
